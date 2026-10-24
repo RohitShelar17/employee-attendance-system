@@ -1,8 +1,65 @@
 # Exam Module — Implementation Plan
 
-**Status:** planned, not started
+**Status:** built, 2026-10-14. The plan below is kept as written; what changed
+during the build is listed under *As built* immediately after it.
 **Date:** 2026-09-29
 **Purpose:** weekly internal study exams for product knowledge. Not appraisal input.
+
+---
+
+## As built — where the implementation differs from this plan
+
+Read this before the plan. Everything else below still describes the module
+accurately.
+
+| Plan said | Built as | Why |
+|---|---|---|
+| migrations `V16` / `V17` | **`V18__create_exam_tables.sql`**, **`V19__seed_exam_permissions.sql`** | The meeting module took V16 and V17 first |
+| `ExamStatus.ARCHIVED` | `CANCELLED` | Archiving was never specified; calling an exam off is a real operation and needed a reason column |
+| `ParticipantStatus` with `PASSED` / `FAILED` / `RETAKE_PENDING` | `ASSIGNED`, `IN_PROGRESS`, `SUBMITTED`, `NOT_ATTEMPTED` | Pass and fail live on the attempt, derived from the answers. Duplicating them on the participant creates two places that can disagree about one result |
+| `ExamSweepService`, scheduled | `ExamWindowService`, **lazy** | There is no scheduler anywhere in this application. The window is the authority and the status catches up on the next read, exactly as the meeting module settles itself |
+| nine service classes under `service/exam/` | `ExamService`/`Impl`, `ExamAttemptService`/`Impl`, plus `ExamImportService`, `ExamRetakeService`, `ExamAnalyticsService`, and the components in `service/exam/` | Matches the existing split: interface + impl for the two large ones, concrete classes for the narrower ones, as `NotificationService` and `AuditLogService` already are |
+| — | `exams.entry_closes_before_min` | Starting five minutes before the window shuts gives five minutes for a twenty-five minute paper. Arithmetically right, reliably a complaint |
+| — | `exams.partial_credit` | All-or-nothing on multi-select by default, switchable per exam |
+| — | a second retake guard on the **exam** | The per-person guard reads `exam_participants`, which do not exist until a retake is published. Two unpublished retakes could otherwise both be opened and published, and the second would have no unseen set left to deal |
+
+### Two bugs the H2 test suite could not have caught
+
+Both were found by starting the application against real MySQL, which is why
+that step is in the verification list rather than optional.
+
+1. **`file_sha256 CHAR(64)` against the entity's `VARCHAR(64)`.** Hibernate's
+   `ddl-auto: validate` refuses to start on it. The test schema is generated
+   from the entities, so it agreed with itself and said nothing.
+2. **A bulk `DELETE FROM ExamQuestionSet`** relied on the database cascading to
+   `exam_questions`. V18 declares that cascade and the entity-generated test
+   schema does not, so the re-import path passed against MySQL and failed
+   against H2. Now deleted through JPA, so the cascade is the mapping's.
+
+### Verified end to end, 2026-10-14
+
+Against real MySQL and in a real browser, with the corrected 60-question
+workbook (`docs/exam/Health_Insurance_MCQ_3_Sets_FIXED.xlsx`):
+
+- Flyway applied V18 and V19 cleanly; `ddl-auto: validate` passed.
+- `SELECT … WHERE p.module = 'EXAM' GROUP BY r.code` → HR 7, **ADMIN 7,
+  SUPER_ADMIN 7**, MANAGER 3, EMPLOYEE 2. The explicit grant in V19 is doing
+  the work; without it administrators would 403 on every endpoint here.
+- The real workbook imported: 3 sets of 20, 100 marks each, answers spread
+  5/5/5/5 per set. The quality analyser independently found the same three
+  duplicate questions the workbook's own QA Report sheet lists.
+- Published to 16 people, split A:6 B:5 C:5. The administrator who loaded the
+  questions was marked **tester** automatically and excluded from the pass rate.
+- A paper sat in the browser: server clock counting down, every answer autosaved,
+  submitted, scored 15/100 for 3 of 20 — and the result screen showed the
+  correct answer, the explanation and the source for every question.
+- The window closed with nobody watching. The next read settled the exam to
+  CLOSED and moved all 15 non-starters to `NOT_ATTEMPTED`. No scheduler ran.
+- A retake was opened for those 15 (the tester excluded, "wrote the paper") and
+  published. **Every one of the 15 was dealt a set they had not seen; zero
+  clashes.**
+
+287 backend tests pass, 60 of them new.
 
 ---
 
@@ -270,8 +327,42 @@ Additions to existing enums:
 | `EXAM_RESULT_VIEW_ALL` | HR |
 | `EXAM_RESULT_EXPORT` | HR |
 
-ADMIN and SUPER_ADMIN pick these up automatically — V5 grants ADMIN everything
-except two named permissions, and SUPER_ADMIN the whole catalogue.
+> **ADMIN and SUPER_ADMIN do _not_ pick these up automatically.** An earlier
+> draft of this plan said they did, on the grounds that V5 grants ADMIN
+> everything except two named permissions and SUPER_ADMIN the whole catalogue.
+> That is wrong, and it was confirmed wrong while building the meeting module.
+>
+> Those V5 statements are one-shot `INSERT … SELECT`s, evaluated once when V5
+> ran. They are not views, triggers or rules, and there is no runtime superuser
+> bypass — `UserPrincipal` builds its authorities strictly from
+> `role.getPermissions()`. A permission inserted by a later migration therefore
+> gets no `role_permissions` row for either role, and an administrator would
+> get 403 on every endpoint in this module.
+>
+> `V17__seed_exam_permissions.sql` must end with an explicit grant:
+>
+> ```sql
+> INSERT INTO role_permissions (role_id, permission_id)
+> SELECT r.id, p.id FROM roles r JOIN permissions p
+>   ON p.code IN ('EXAM_VIEW_SELF', 'EXAM_ATTEMPT', 'EXAM_MANAGE',
+>                 'EXAM_QUESTION_IMPORT', 'EXAM_RESULT_VIEW_TEAM',
+>                 'EXAM_RESULT_VIEW_ALL', 'EXAM_RESULT_EXPORT')
+> WHERE r.code IN ('ADMIN', 'SUPER_ADMIN');
+> ```
+>
+> `V17__seed_meeting_permissions.sql` carries the same block, with the same
+> comment explaining why. **Every future permission migration needs it.**
+>
+> Verify it rather than assuming — after the migration runs:
+>
+> ```sql
+> SELECT r.code, COUNT(*) FROM roles r
+>   JOIN role_permissions rp ON rp.role_id = r.id
+>   JOIN permissions p ON p.id = rp.permission_id
+>  WHERE p.module = 'EXAM' GROUP BY r.code;
+> ```
+>
+> A test that uses an HR principal will not catch this; only an ADMIN one will.
 
 ---
 

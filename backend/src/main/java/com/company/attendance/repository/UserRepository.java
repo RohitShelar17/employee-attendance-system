@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -35,4 +36,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsernameIgnoreCase(String username);
 
     boolean existsByEmailIgnoreCase(String email);
+
+    /**
+     * Employee ids of the people who hold one permission.
+     *
+     * <p>Used by the exam module to mark whoever can load a question bank as a
+     * TESTER: they sit the paper having already read the answers, so they stay
+     * on the roster and out of the pass rate. Leaving them in makes every
+     * question look better understood than it is.
+     */
+    @Query("""
+            SELECT u.employee.id FROM User u
+             JOIN u.roles r
+             JOIN r.permissions p
+             WHERE u.active = TRUE
+               AND r.active = TRUE
+               AND u.employee IS NOT NULL
+               AND p.code = :permissionCode
+            """)
+    List<Long> findEmployeeIdsWithPermission(@Param("permissionCode") String permissionCode);
 }
