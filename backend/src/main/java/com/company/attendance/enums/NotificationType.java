@@ -28,6 +28,18 @@ public enum NotificationType {
     ATTENDANCE_MISSING_PUNCH_OUT(NotificationCategory.ATTENDANCE),
     ATTENDANCE_MARKED_ABSENT(NotificationCategory.ATTENDANCE),
 
+    // Meetings. SYSTEM rather than a category of their own: preferences are
+    // per-category, and a separate one would leave everybody with no row for
+    // it until they went looking.
+    MEETING_SCHEDULED(NotificationCategory.SYSTEM),
+    MEETING_CANCELLED(NotificationCategory.SYSTEM),
+
+    // Exams. SYSTEM for the same reason as meetings: preferences are
+    // per-category, and a category of their own would leave everybody with
+    // no row for it until they went looking.
+    EXAM_PUBLISHED(NotificationCategory.SYSTEM),
+    EXAM_RETAKE_OPENED(NotificationCategory.SYSTEM),
+
     SYSTEM_ANNOUNCEMENT(NotificationCategory.SYSTEM);
 
     private final NotificationCategory category;

@@ -14,12 +14,28 @@ export const ROUTES = {
   leaveApprovals: '/approvals/leave',
   requestApprovals: '/approvals/requests',
 
+  meetings: '/meetings',
+  meetingsManage: '/meetings/manage',
+  meetingNew: '/meetings/new',
+  meetingDetail: (id: number | string) => `/meetings/${id}`,
+  meetingEdit: (id: number | string) => `/meetings/${id}/edit`,
+  meetingAttendance: (id: number | string) => `/meetings/${id}/attendance`,
+
+  exams: '/exams',
+  examAttempt: (attemptId: number | string) => `/exams/attempt/${attemptId}`,
+  examResult: (attemptId: number | string) => `/exams/result/${attemptId}`,
+  examsManage: '/exams/manage',
+  examNew: '/exams/new',
+  examDetail: (id: number | string) => `/exams/${id}`,
+  examEdit: (id: number | string) => `/exams/${id}/edit`,
+
   regularization: '/requests/regularization',
   workFromHome: '/requests/wfh',
   employees: '/employees',
   employeeNew: '/employees/new',
   employeeDetail: (id: number | string) => `/employees/${id}`,
   employeeEdit: (id: number | string) => `/employees/${id}/edit`,
+  employeeAttendance: (id: number | string) => `/employees/${id}/attendance`,
   employeeImport: '/employees/import',
 
   adminDepartments: '/admin/departments',

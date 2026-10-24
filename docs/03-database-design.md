@@ -83,6 +83,37 @@ Indexes: `UNIQUE(username)`, `UNIQUE(email)`, `UNIQUE(employee_id)`, `IDX(is_act
 ### `role_permissions`
 `role_id` FK, `permission_id` FK — PK `(role_id, permission_id)`
 
+> **Adding a permission in a later migration? Grant it to ADMIN and
+> SUPER_ADMIN explicitly.**
+>
+> `V5` grants ADMIN `WHERE p.code NOT IN (…)` and SUPER_ADMIN `ON 1 = 1`, which
+> reads like "everything, forever". It is not. Both are one-shot
+> `INSERT … SELECT` statements that were evaluated once, when V5 ran — not
+> views, not triggers, not rules. A permission added by a later migration gets
+> no row for either role.
+>
+> There is no runtime fallback either: `UserPrincipal` builds its authorities
+> strictly from `role.getPermissions()`, so an administrator simply gets 403 on
+> the new endpoints.
+>
+> ```sql
+> -- Every permission migration after V5 ends with this.
+> INSERT INTO role_permissions (role_id, permission_id)
+> SELECT r.id, p.id FROM roles r JOIN permissions p
+>   ON p.code IN (/* the new codes */)
+> WHERE r.code IN ('ADMIN', 'SUPER_ADMIN');
+> ```
+>
+> `V17__seed_meeting_permissions.sql` is the worked example. Confirm it after
+> migrating, because a test written with an HR principal will pass regardless:
+>
+> ```sql
+> SELECT r.code, COUNT(*) FROM roles r
+>   JOIN role_permissions rp ON rp.role_id = r.id
+>   JOIN permissions p ON p.id = rp.permission_id
+>  WHERE p.module = '<MODULE>' GROUP BY r.code;
+> ```
+
 ### `refresh_tokens`
 `id`, `user_id` FK, `token_hash` VARCHAR(64) UNIQUE (SHA-256 — the raw token is never stored), `issued_at`, `expires_at`, `revoked_at`, `replaced_by_token_id` FK self, `family_id` CHAR(36), `device_info`, `ip_address`
 Indexes: `UNIQUE(token_hash)`, `IDX(user_id, expires_at)`, `IDX(family_id)`

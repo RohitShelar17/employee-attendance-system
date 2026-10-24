@@ -6,27 +6,40 @@ import com.company.attendance.dto.response.report.ReportResult;
 import com.company.attendance.entity.Attendance;
 import com.company.attendance.entity.AttendanceRegularization;
 import com.company.attendance.entity.Employee;
+import com.company.attendance.entity.Exam;
+import com.company.attendance.entity.ExamAttempt;
+import com.company.attendance.entity.ExamParticipant;
+import com.company.attendance.entity.ExamQuestion;
+import com.company.attendance.entity.MeetingParticipant;
 import com.company.attendance.entity.LeaveRequest;
 import com.company.attendance.entity.LeaveRequestDay;
 import com.company.attendance.enums.AccessScope;
 import com.company.attendance.enums.DayType;
 import com.company.attendance.enums.ErrorCode;
+import com.company.attendance.enums.ExamParticipantKind;
 import com.company.attendance.enums.ReportType;
 import com.company.attendance.exception.BusinessException;
 import com.company.attendance.repository.AttendanceRegularizationRepository;
 import com.company.attendance.repository.AttendanceRepository;
 import com.company.attendance.repository.EmployeeRepository;
+import com.company.attendance.repository.ExamAnswerRepository;
+import com.company.attendance.repository.ExamAttemptRepository;
+import com.company.attendance.repository.ExamParticipantRepository;
+import com.company.attendance.repository.ExamQuestionRepository;
 import com.company.attendance.repository.LeaveRequestDayRepository;
 import com.company.attendance.repository.LeaveRequestRepository;
+import com.company.attendance.repository.MeetingParticipantRepository;
 import com.company.attendance.security.AccessScopeResolver;
 import com.company.attendance.security.UserPrincipal;
 import com.company.attendance.service.CalendarService;
 import com.company.attendance.service.ReportService;
+import com.company.attendance.service.exam.ExamSets;
 import com.company.attendance.util.DateTimeUtils;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -75,6 +88,11 @@ public class ReportServiceImpl implements ReportService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final LeaveRequestDayRepository leaveRequestDayRepository;
     private final AttendanceRegularizationRepository regularizationRepository;
+    private final MeetingParticipantRepository meetingParticipantRepository;
+    private final ExamParticipantRepository examParticipantRepository;
+    private final ExamAttemptRepository examAttemptRepository;
+    private final ExamAnswerRepository examAnswerRepository;
+    private final ExamQuestionRepository examQuestionRepository;
     private final CalendarService calendarService;
     private final AccessScopeResolver accessScopeResolver;
 
@@ -83,6 +101,11 @@ public class ReportServiceImpl implements ReportService {
                              LeaveRequestRepository leaveRequestRepository,
                              LeaveRequestDayRepository leaveRequestDayRepository,
                              AttendanceRegularizationRepository regularizationRepository,
+                             MeetingParticipantRepository meetingParticipantRepository,
+                             ExamParticipantRepository examParticipantRepository,
+                             ExamAttemptRepository examAttemptRepository,
+                             ExamAnswerRepository examAnswerRepository,
+                             ExamQuestionRepository examQuestionRepository,
                              CalendarService calendarService,
                              AccessScopeResolver accessScopeResolver) {
         this.employeeRepository = employeeRepository;
@@ -90,6 +113,11 @@ public class ReportServiceImpl implements ReportService {
         this.leaveRequestRepository = leaveRequestRepository;
         this.leaveRequestDayRepository = leaveRequestDayRepository;
         this.regularizationRepository = regularizationRepository;
+        this.meetingParticipantRepository = meetingParticipantRepository;
+        this.examParticipantRepository = examParticipantRepository;
+        this.examAttemptRepository = examAttemptRepository;
+        this.examAnswerRepository = examAnswerRepository;
+        this.examQuestionRepository = examQuestionRepository;
         this.calendarService = calendarService;
         this.accessScopeResolver = accessScopeResolver;
     }
@@ -177,6 +205,11 @@ public class ReportServiceImpl implements ReportService {
             case DEPARTMENT_ATTENDANCE -> departmentAttendance(scope, population, from, to);
             case LOCATION_ATTENDANCE -> locationAttendance(scope, population, from, to);
             case REGULARIZATIONS -> regularizations(scope, population, from, to, filter);
+            case MEETING_ATTENDANCE -> meetingAttendance(scope, population, from, to);
+            case MEETING_PARTICIPATION -> meetingParticipation(scope, population, from, to);
+            case EXAM_RESULTS -> examResults(scope, population, from, to);
+            case EXAM_PARTICIPATION -> examParticipation(scope, population, from, to);
+            case EXAM_QUESTION_ANALYSIS -> examQuestionAnalysis(scope, population, from, to);
         };
     }
 
@@ -722,6 +755,407 @@ public class ReportServiceImpl implements ReportService {
 
     private String departmentName(Employee employee) {
         return employee.getDepartment() == null ? "Unassigned" : employee.getDepartment().getName();
+    }
+
+
+    // -----------------------------------------------------------------
+    // Meetings
+    //
+    // Both reports measure one thing: whether a person opened the join link.
+    // The column labels say so, because "Attended" would be a claim this
+    // system cannot support. Somebody can dial in from a calendar invite and
+    // never touch our link, and somebody can open the link and never speak.
+    // -----------------------------------------------------------------
+
+    private Built meetingAttendance(AccessScope scope, List<Employee> population,
+                                    LocalDate from, LocalDate to) {
+
+        List<ReportColumn> columns = List.of(
+                ReportColumn.date("meetingDate", "Date"),
+                ReportColumn.text("title", "Meeting"),
+                ReportColumn.text("employeeCode", "Code"),
+                ReportColumn.text("employeeName", "Employee"),
+                ReportColumn.text("department", "Department"),
+                ReportColumn.status("status", "Outcome"),
+                ReportColumn.time("joinedAt", "Link opened"),
+                ReportColumn.duration("minutes", "Approx. minutes"),
+                ReportColumn.text("excuseReason", "Reason"));
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        for (MeetingParticipant participant : meetingRows(population, from, to)) {
+            Employee employee = participant.getEmployee();
+            ZoneId zone = DateTimeUtils.zoneOf(employee);
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("meetingDate",
+                    DateTimeUtils.localDate(participant.getMeeting().getScheduledStartAt(), zone));
+            row.put("title", participant.getMeeting().getTitle());
+            row.put("employeeCode", employee.getEmployeeCode());
+            row.put("employeeName", employee.getFullName());
+            row.put("department",
+                    employee.getDepartment() == null ? null : employee.getDepartment().getName());
+            row.put("status", participant.getStatus().name());
+            row.put("joinedAt", participant.getFirstJoinedAt());
+            row.put("minutes", participant.getAttendedMinutesEstimate());
+            row.put("excuseReason", participant.getExcuseReason());
+            rows.add(row);
+        }
+
+        return new Built(scope, from, to, columns, rows, Map.of("rows", rows.size()));
+    }
+
+    private Built meetingParticipation(AccessScope scope, List<Employee> population,
+                                       LocalDate from, LocalDate to) {
+
+        List<ReportColumn> columns = List.of(
+                ReportColumn.text("employeeCode", "Code"),
+                ReportColumn.text("employeeName", "Employee"),
+                ReportColumn.text("department", "Department"),
+                ReportColumn.number("invited", "Invited"),
+                ReportColumn.number("joined", "Opened link"),
+                ReportColumn.number("late", "Late"),
+                ReportColumn.number("excused", "Excused"),
+                ReportColumn.number("missed", "No link opened"),
+                ReportColumn.number("rate", "Join rate %"));
+
+        Map<Long, int[]> tally = new LinkedHashMap<>();
+        Map<Long, Employee> people = new LinkedHashMap<>();
+
+        for (MeetingParticipant participant : meetingRows(population, from, to)) {
+            Employee employee = participant.getEmployee();
+            people.putIfAbsent(employee.getId(), employee);
+            // invited, joined, late, excused, missed
+            int[] counts = tally.computeIfAbsent(employee.getId(), id -> new int[5]);
+            counts[0]++;
+            switch (participant.getStatus()) {
+                case JOINED -> counts[1]++;
+                case JOINED_LATE -> {
+                    counts[1]++;
+                    counts[2]++;
+                }
+                case EXCUSED -> counts[3]++;
+                case NOT_JOINED, INVITED -> counts[4]++;
+            }
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map.Entry<Long, int[]> entry : tally.entrySet()) {
+            Employee employee = people.get(entry.getKey());
+            int[] counts = entry.getValue();
+
+            // Excused meetings are out of the denominator. Counting somebody
+            // as a poor attender for being on sanctioned leave is exactly the
+            // error that makes people stop trusting a report.
+            int expected = counts[0] - counts[3];
+            int rate = expected == 0 ? 100 : Math.round(counts[1] * 100f / expected);
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("employeeCode", employee.getEmployeeCode());
+            row.put("employeeName", employee.getFullName());
+            row.put("department",
+                    employee.getDepartment() == null ? null : employee.getDepartment().getName());
+            row.put("invited", counts[0]);
+            row.put("joined", counts[1]);
+            row.put("late", counts[2]);
+            row.put("excused", counts[3]);
+            row.put("missed", counts[4]);
+            row.put("rate", rate);
+            rows.add(row);
+        }
+
+        rows.sort(Comparator.comparing(r -> String.valueOf(r.get("employeeCode"))));
+        return new Built(scope, from, to, columns, rows, Map.of("rows", rows.size()));
+    }
+
+    private List<MeetingParticipant> meetingRows(List<Employee> population,
+                                                 LocalDate from, LocalDate to) {
+        Set<Long> ids = idsOf(population);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        ZoneId zone = DateTimeUtils.zoneOf(population.get(0));
+
+        return meetingParticipantRepository.findForReport(
+                false, ids,
+                from.atStartOfDay(zone).toInstant(),
+                to.plusDays(1).atStartOfDay(zone).toInstant());
+    }
+
+    // -----------------------------------------------------------------
+    // Exams
+    // -----------------------------------------------------------------
+
+    /**
+     * One row per person per exam.
+     *
+     * <p>Testers are kept in and labelled rather than filtered out. This report
+     * answers "what did this person score", and silently omitting the people who
+     * wrote the paper would make the row count disagree with the roster on
+     * screen. The rates they would distort live in EXAM_PARTICIPATION and in the
+     * analysis screen, and both exclude them.
+     */
+    private Built examResults(AccessScope scope, List<Employee> population,
+                              LocalDate from, LocalDate to) {
+
+        List<ReportColumn> columns = List.of(
+                ReportColumn.date("examDate", "Opens"),
+                ReportColumn.text("examCode", "Code"),
+                ReportColumn.text("examTitle", "Exam"),
+                ReportColumn.text("employeeCode", "Emp code"),
+                ReportColumn.text("employeeName", "Employee"),
+                ReportColumn.text("department", "Department"),
+                ReportColumn.text("setCode", "Set"),
+                ReportColumn.text("kind", "Counted as"),
+                ReportColumn.status("status", "Outcome"),
+                ReportColumn.number("score", "Score"),
+                ReportColumn.number("maxScore", "Out of"),
+                ReportColumn.text("result", "Pass/fail"),
+                ReportColumn.number("minutesTaken", "Minutes taken"),
+                ReportColumn.text("submission", "Handed in by"));
+
+        List<ExamParticipant> roster = examRows(population, from, to);
+        Map<Long, ExamAttempt> attempts = examAttemptsFor(roster);
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        for (ExamParticipant participant : roster) {
+            Employee employee = participant.getEmployee();
+            ZoneId zone = DateTimeUtils.zoneOf(employee);
+            ExamAttempt attempt = attempts.get(participant.getId());
+            boolean done = attempt != null && attempt.isSubmitted();
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("examDate",
+                    DateTimeUtils.localDate(participant.getExam().getWindowStart(), zone));
+            row.put("examCode", participant.getExam().getExamCode());
+            row.put("examTitle", participant.getExam().getTitle());
+            row.put("employeeCode", employee.getEmployeeCode());
+            row.put("employeeName", employee.getFullName());
+            row.put("department",
+                    employee.getDepartment() == null ? null : employee.getDepartment().getName());
+            row.put("setCode", participant.getAssignedSet().getSetCode());
+            row.put("kind", participant.getParticipantKind() == ExamParticipantKind.TESTER
+                    ? "Tester (out of the rates)" : "Candidate");
+            row.put("status", participant.getStatus().name());
+            row.put("score", done ? attempt.getScore() : null);
+            row.put("maxScore", done ? attempt.getMaxScore() : null);
+            // Blank rather than "Fail" for somebody who never sat it: not
+            // turning up is a participation problem, not a knowledge one.
+            row.put("result", done
+                    ? (Boolean.TRUE.equals(attempt.getPassed()) ? "Pass" : "Fail") : null);
+            row.put("minutesTaken", done
+                    ? (int) Duration.between(attempt.getStartedAt(),
+                            attempt.getSubmittedAt()).toMinutes()
+                    : null);
+            row.put("submission", done ? attempt.getSubmissionSource().name() : null);
+            rows.add(row);
+        }
+
+        return new Built(scope, from, to, columns, rows, Map.of("rows", rows.size()));
+    }
+
+    /**
+     * One row per person over the range: how many exams they were given and
+     * what became of them.
+     *
+     * <p>The one anybody actually reads, because it answers "who has stopped
+     * sitting these" without going exam by exam.
+     */
+    private Built examParticipation(AccessScope scope, List<Employee> population,
+                                    LocalDate from, LocalDate to) {
+
+        List<ReportColumn> columns = List.of(
+                ReportColumn.text("employeeCode", "Code"),
+                ReportColumn.text("employeeName", "Employee"),
+                ReportColumn.text("department", "Department"),
+                ReportColumn.number("assigned", "Assigned"),
+                ReportColumn.number("sat", "Sat"),
+                ReportColumn.number("passed", "Passed"),
+                ReportColumn.number("failed", "Failed"),
+                ReportColumn.number("missed", "Did not sit"),
+                ReportColumn.number("sitRate", "Sat %"),
+                ReportColumn.number("passRate", "Passed %"),
+                ReportColumn.number("averageScore", "Average score"));
+
+        List<ExamParticipant> roster = examRows(population, from, to);
+        Map<Long, ExamAttempt> attempts = examAttemptsFor(roster);
+
+        // assigned, sat, passed, failed, missed, scoreTotal
+        Map<Long, int[]> tally = new LinkedHashMap<>();
+        Map<Long, Employee> people = new LinkedHashMap<>();
+
+        for (ExamParticipant participant : roster) {
+            // Testers are left out of this one: they sat the paper having read
+            // the answers, so counting them inflates every rate on the page.
+            if (participant.getParticipantKind() == ExamParticipantKind.TESTER) {
+                continue;
+            }
+            Employee employee = participant.getEmployee();
+            people.putIfAbsent(employee.getId(), employee);
+            int[] counts = tally.computeIfAbsent(employee.getId(), id -> new int[6]);
+
+            counts[0]++;
+            ExamAttempt attempt = attempts.get(participant.getId());
+            if (attempt != null && attempt.isSubmitted()) {
+                counts[1]++;
+                if (Boolean.TRUE.equals(attempt.getPassed())) {
+                    counts[2]++;
+                } else {
+                    counts[3]++;
+                }
+                counts[5] += attempt.getScore() == null ? 0 : attempt.getScore();
+            } else {
+                counts[4]++;
+            }
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        people.forEach((employeeId, employee) -> {
+            int[] counts = tally.get(employeeId);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("employeeCode", employee.getEmployeeCode());
+            row.put("employeeName", employee.getFullName());
+            row.put("department",
+                    employee.getDepartment() == null ? null : employee.getDepartment().getName());
+            row.put("assigned", counts[0]);
+            row.put("sat", counts[1]);
+            row.put("passed", counts[2]);
+            row.put("failed", counts[3]);
+            row.put("missed", counts[4]);
+            row.put("sitRate", counts[0] == 0 ? 0 : Math.round(counts[1] * 100.0 / counts[0]));
+            // Out of what they sat, not what they were given: somebody who
+            // missed two and passed the third knows the material, and has a
+            // different problem from somebody who sat three and failed them all.
+            row.put("passRate", counts[1] == 0 ? null : Math.round(counts[2] * 100.0 / counts[1]));
+            row.put("averageScore",
+                    counts[1] == 0 ? null : Math.round((double) counts[5] / counts[1]));
+            rows.add(row);
+        });
+
+        rows.sort(Comparator.comparing(row -> String.valueOf(row.get("employeeCode"))));
+        return new Built(scope, from, to, columns, rows, Map.of("rows", rows.size()));
+    }
+
+    /**
+     * One row per question: how many were asked it, how many got it right, and
+     * the wrong answer most of them gave.
+     *
+     * <p>The report that matters for a study exam. "31 of 40 people got the
+     * reset-benefit question wrong" names the next training session, which no
+     * individual score ever does — so it is sorted worst first.
+     *
+     * <p>The figures are not narrowed to the caller's subtree, deliberately:
+     * they describe the paper rather than people, and a manager's slice of four
+     * answers would read as evidence while being noise. The population still
+     * decides <em>which exams</em> appear.
+     */
+    private Built examQuestionAnalysis(AccessScope scope, List<Employee> population,
+                                       LocalDate from, LocalDate to) {
+
+        List<ReportColumn> columns = List.of(
+                ReportColumn.text("examCode", "Exam"),
+                ReportColumn.text("setCode", "Set"),
+                ReportColumn.number("questionNumber", "Q"),
+                ReportColumn.text("topic", "Product"),
+                ReportColumn.text("question", "Question"),
+                ReportColumn.number("asked", "Asked"),
+                ReportColumn.number("answered", "Answered"),
+                ReportColumn.number("skipped", "Skipped"),
+                ReportColumn.number("correct", "Correct"),
+                ReportColumn.number("correctRate", "Correct %"),
+                ReportColumn.text("commonestWrong", "Commonest wrong answer"));
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        for (Exam exam : examsIn(population, from, to)) {
+            Map<Long, long[]> stats = new LinkedHashMap<>();
+            for (Object[] stat : examAnswerRepository.questionStats(exam.getId(), false)) {
+                stats.put(((Number) stat[0]).longValue(),
+                        new long[] {((Number) stat[1]).longValue(),
+                                ((Number) stat[2]).longValue()});
+            }
+            Map<Long, Integer> askedPerSet = new LinkedHashMap<>();
+            for (Object[] stat : examAttemptRepository.submittedCountPerSet(exam.getId(), false)) {
+                askedPerSet.put(((Number) stat[0]).longValue(), ((Number) stat[1]).intValue());
+            }
+            Map<Long, String> commonestWrong = new LinkedHashMap<>();
+            for (Object[] stat : examAnswerRepository.wrongAnswerSpread(exam.getId(), false)) {
+                commonestWrong.putIfAbsent(((Number) stat[0]).longValue(),
+                        stat[1] + " (" + ((Number) stat[2]).intValue() + ")");
+            }
+
+            for (ExamQuestion question : examQuestionRepository.findBank(ExamSets.bankExamId(exam))) {
+                long[] counts = stats.getOrDefault(question.getId(), new long[] {0, 0});
+                int answered = (int) counts[0];
+                int correct = (int) counts[1];
+                // How many papers carried it, not how many answer rows exist:
+                // a question twenty people skipped is a question twenty people
+                // could not answer, and counting only rows would score it 100%.
+                int asked = Math.max(
+                        askedPerSet.getOrDefault(question.getQuestionSet().getId(), 0), answered);
+
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("examCode", exam.getExamCode());
+                row.put("setCode", question.getQuestionSet().getSetCode());
+                row.put("questionNumber", question.getQuestionNumber());
+                row.put("topic", question.getTopic());
+                row.put("question", question.getQuestionText());
+                row.put("asked", asked);
+                row.put("answered", answered);
+                row.put("skipped", asked - answered);
+                row.put("correct", correct);
+                // Null, not zero, when nobody was asked: that question is
+                // unmeasured rather than failed, and a zero would sort it to
+                // the top of a list read to decide what to teach next.
+                row.put("correctRate", asked == 0 ? null : Math.round(correct * 100.0 / asked));
+                row.put("commonestWrong", commonestWrong.get(question.getId()));
+                rows.add(row);
+            }
+        }
+
+        rows.sort(Comparator.comparing(row -> row.get("correctRate") == null
+                ? Long.MAX_VALUE : ((Number) row.get("correctRate")).longValue()));
+        return new Built(scope, from, to, columns, rows, Map.of("rows", rows.size()));
+    }
+
+    /** Roster rows for the exams whose window opens inside the range. */
+    private List<ExamParticipant> examRows(List<Employee> population, LocalDate from, LocalDate to) {
+        Set<Long> ids = idsOf(population);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        ZoneId zone = DateTimeUtils.zoneOf(population.get(0));
+
+        return examParticipantRepository.findForReport(
+                false, ids,
+                from.atStartOfDay(zone).toInstant(),
+                to.plusDays(1).atStartOfDay(zone).toInstant());
+    }
+
+    /**
+     * Every attempt on the roster, in one query.
+     *
+     * <p>A month-long report over two hundred people is otherwise two hundred
+     * queries, which is the difference between a report and a timeout.
+     */
+    private Map<Long, ExamAttempt> examAttemptsFor(List<ExamParticipant> roster) {
+        if (roster.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, ExamAttempt> byParticipant = new HashMap<>();
+        examAttemptRepository.findByParticipantIdIn(
+                        roster.stream().map(ExamParticipant::getId).toList())
+                .forEach(attempt -> byParticipant.put(attempt.getParticipant().getId(), attempt));
+        return byParticipant;
+    }
+
+    /** The distinct exams the visible population was given in the range. */
+    private List<Exam> examsIn(List<Employee> population, LocalDate from, LocalDate to) {
+        Map<Long, Exam> exams = new LinkedHashMap<>();
+        for (ExamParticipant participant : examRows(population, from, to)) {
+            exams.putIfAbsent(participant.getExam().getId(), participant.getExam());
+        }
+        return List.copyOf(exams.values());
     }
 
     private ReportResult assemble(ReportType type, Built built,

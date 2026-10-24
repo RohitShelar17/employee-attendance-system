@@ -79,6 +79,21 @@ export const MENU: MenuItem[] = [
     ],
   },
   {
+    label: 'Meetings',
+    to: ROUTES.meetings,
+    icon: 'videocam',
+    requiredPermissions: [PERMISSIONS.MEETING_VIEW_SELF],
+    children: [
+      { label: 'My Meetings', to: ROUTES.meetings, icon: 'event' },
+      {
+        label: 'Manage',
+        to: ROUTES.meetingsManage,
+        icon: 'edit_calendar',
+        requiredPermissions: [PERMISSIONS.MEETING_MANAGE_TEAM, PERMISSIONS.MEETING_MANAGE_ALL],
+      },
+    ],
+  },
+  {
     label: 'Requests',
     to: ROUTES.regularization,
     icon: 'assignment_turned_in',
@@ -86,6 +101,18 @@ export const MENU: MenuItem[] = [
     children: [
       { label: 'Regularization', to: ROUTES.regularization, icon: 'edit_calendar' },
       { label: 'Work From Home', to: ROUTES.workFromHome, icon: 'home_work' },
+    ],
+  },
+  {
+    label: 'Exams',
+    to: ROUTES.exams,
+    icon: 'quiz',
+    requiredPermissions: [PERMISSIONS.EXAM_VIEW_SELF, PERMISSIONS.EXAM_MANAGE],
+    children: [
+      { label: 'My Exams', to: ROUTES.exams, icon: 'assignment',
+        requiredPermissions: [PERMISSIONS.EXAM_VIEW_SELF] },
+      { label: 'Manage Exams', to: ROUTES.examsManage, icon: 'edit_note',
+        requiredPermissions: [PERMISSIONS.EXAM_MANAGE] },
     ],
   },
   {

@@ -37,6 +37,25 @@ public class DatabaseCleaner {
             "notifications",
             "notification_preferences",
 
+            // Exams. Children before parents: answers before attempts,
+            // attempts before participants, participants before the sets they
+            // point at, and the bank last.
+            "exam_answers",
+            "exam_attempts",
+            "exam_participants",
+            "exam_uploads",
+            "exam_audience",
+            "exam_question_options",
+            "exam_questions",
+            "exam_question_sets",
+            "exams",
+
+            // Meetings
+            "meeting_join_events",
+            "meeting_participants",
+            "meeting_audience",
+            "meetings",
+
             // Requests
             "regularization_approvals",
             "attendance_regularizations",

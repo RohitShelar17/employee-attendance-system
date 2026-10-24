@@ -98,7 +98,7 @@ class RequestFlowIT {
     void seed() {
         databaseCleaner.clean();
 
-        yesterday = LocalDate.now().minusDays(1);
+        yesterday = lastWorkingDay();
 
         Office office = new Office();
         office.setCode("HO");
@@ -780,5 +780,21 @@ class RequestFlowIT {
         UserPrincipal l2 = principal(5L, manager, "REGULARIZATION_APPROVE_L2");
         assertThat(regularizationService.getPendingApprovals(l2, PageRequest.of(0, 20)).totalElements())
                 .isEqualTo(1);
+    }
+
+    /**
+     * The most recent day that is not a weekly off.
+     *
+     * <p>Not simply yesterday: on a Monday that is Sunday, and a test that
+     * then asserts the day resolved to PRESENT fails once a week for a reason
+     * that has nothing to do with what it is testing.
+     */
+    private static LocalDate lastWorkingDay() {
+        LocalDate date = LocalDate.now().minusDays(1);
+        while (date.getDayOfWeek() == DayOfWeek.SATURDAY
+                || date.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            date = date.minusDays(1);
+        }
+        return date;
     }
 }

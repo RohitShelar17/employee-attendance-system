@@ -22,7 +22,20 @@ public enum ReportType {
     WORKING_HOURS("Working Hours", "Hours worked per person across the range."),
     DEPARTMENT_ATTENDANCE("Department Attendance", "Attendance rolled up by department."),
     LOCATION_ATTENDANCE("Location Attendance", "Where punches were made, and what was flagged."),
-    REGULARIZATIONS("Regularizations", "Attendance corrections raised in the range.");
+    REGULARIZATIONS("Regularizations", "Attendance corrections raised in the range."),
+
+    MEETING_ATTENDANCE("Meeting Attendance",
+            "One row per person per meeting. Joining is measured by the link being opened."),
+    MEETING_PARTICIPATION("Meeting Participation",
+            "One row per person: how many meetings they were invited to and how many they opened."),
+
+    EXAM_RESULTS("Exam Results",
+            "One row per person per exam: the set they sat, their score and whether they passed."),
+    EXAM_PARTICIPATION("Exam Participation",
+            "One row per person: exams assigned, sat, passed and missed."),
+    EXAM_QUESTION_ANALYSIS("Exam Question Analysis",
+            "One row per question: how many were asked it, how many got it right, "
+                    + "and the wrong answer most of them gave.");
 
     private final String title;
     private final String description;

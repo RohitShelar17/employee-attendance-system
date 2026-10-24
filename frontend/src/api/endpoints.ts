@@ -36,6 +36,9 @@ export const endpoints = {
     mySummary: '/attendance/me/summary',
     employeeHistory: (id: number) => `/attendance/${id}/history`,
     employeeCalendar: (id: number) => `/attendance/${id}/calendar`,
+    /** Super-admin only, and always audited. See V20. */
+    override: (employeeId: number, date: string) =>
+      `/attendance/${employeeId}/${date}/override`,
   },
   leaves: {
     base: '/leaves',
@@ -53,6 +56,20 @@ export const endpoints = {
     summary: '/dashboard/summary',
     roster: '/dashboard/roster',
     trend: '/dashboard/trend',
+  },
+  meetings: {
+    base: '/meetings',
+    my: '/meetings/my',
+    manage: '/meetings/manage',
+    byId: (id: number) => `/meetings/${id}`,
+    status: (id: number) => `/meetings/${id}/status`,
+    join: (id: number) => `/meetings/${id}/join`,
+    link: (id: number) => `/meetings/${id}/link`,
+    participants: (id: number) => `/meetings/${id}/participants`,
+    publish: (id: number) => `/meetings/${id}/publish`,
+    start: (id: number) => `/meetings/${id}/start`,
+    end: (id: number) => `/meetings/${id}/end`,
+    cancel: (id: number) => `/meetings/${id}/cancel`,
   },
   regularizations: {
     base: '/regularizations',
@@ -78,6 +95,27 @@ export const endpoints = {
     unreadCount: '/notifications/unread-count',
     read: (id: number) => `/notifications/${id}/read`,
     readAll: '/notifications/read-all',
+  },
+  exams: {
+    base: '/exams',
+    byId: (id: number) => `/exams/${id}`,
+    publish: (id: number) => `/exams/${id}/publish`,
+    cancel: (id: number) => `/exams/${id}/cancel`,
+    participants: (id: number) => `/exams/${id}/participants`,
+    questions: (id: number) => `/exams/${id}/questions`,
+    analytics: (id: number) => `/exams/${id}/analytics`,
+    retake: (id: number) => `/exams/${id}/retake`,
+    importTemplate: '/exams/import/template',
+    importWorkbook: (id: number) => `/exams/${id}/import`,
+
+    // Everything under /me is about the signed-in person. No employee id
+    // appears in any of these paths, here or on the server.
+    mine: '/exams/me',
+    start: (examId: number) => `/exams/me/${examId}/attempt`,
+    attempt: (attemptId: number) => `/exams/me/attempts/${attemptId}`,
+    answers: (attemptId: number) => `/exams/me/attempts/${attemptId}/answers`,
+    submit: (attemptId: number) => `/exams/me/attempts/${attemptId}/submit`,
+    result: (attemptId: number) => `/exams/me/attempts/${attemptId}/result`,
   },
   reports: {
     catalogue: '/reports',

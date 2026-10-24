@@ -101,7 +101,7 @@ class DashboardIT {
     void seed() {
         databaseCleaner.clean();
 
-        pastWorkday = LocalDate.now().minusDays(1);
+        pastWorkday = lastWorkingDay();
         while (pastWorkday.getDayOfWeek() == DayOfWeek.SATURDAY
                 || pastWorkday.getDayOfWeek() == DayOfWeek.SUNDAY) {
             pastWorkday = pastWorkday.minusDays(1);
@@ -658,5 +658,21 @@ class DashboardIT {
                 .filter(point -> point.date().equals(pastWorkday))
                 .findFirst().orElseThrow();
         assertThat(theDayTheyJoined.expected()).isEqualTo(2);
+    }
+
+    /**
+     * The most recent day that is not a weekly off.
+     *
+     * <p>Not simply yesterday: on a Monday that is Sunday, and a test that
+     * then asserts the day resolved to PRESENT fails once a week for a reason
+     * that has nothing to do with what it is testing.
+     */
+    private static LocalDate lastWorkingDay() {
+        LocalDate date = LocalDate.now().minusDays(1);
+        while (date.getDayOfWeek() == DayOfWeek.SATURDAY
+                || date.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            date = date.minusDays(1);
+        }
+        return date;
     }
 }
