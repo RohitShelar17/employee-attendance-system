@@ -20,6 +20,89 @@
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     user-select: none;
   }
+
+  /* ---------------------------------------------------------------
+     Phones and tablets
+     --------------------------------------------------------------- */
+
+  /*
+   * iOS Safari zooms the entire page when a focused field's font-size is
+   * under 16px, and then leaves it zoomed. Every input here is 14px by
+   * design, so without this the first tap on any form — including sign-in —
+   * scales the page up and the layout no longer fits.
+   *
+   * Bumping to 16px below the sm breakpoint fixes it at the only place it
+   * matters. Desktop keeps the 14px the design system specifies.
+   */
+  @media (max-width: 639px) {
+    input:not([type='checkbox']):not([type='radio']),
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  /*
+   * Finger-sized targets, on finger-driven devices only.
+   *
+   * hover: none AND pointer: coarse means a finger with no mouse — a phone or
+   * a tablet. A touchscreen laptop matches `pointer: coarse` on its own but
+   * also has a trackpad, so it reports `hover: hover` and keeps the compact
+   * desktop layout, which is what somebody using it with a trackpad wants.
+   *
+   * 44px is Apple's minimum; Material asks for 48dp, and the difference is
+   * not worth maintaining two sets of rules.
+   *
+   * Checkboxes and radios are the worst offenders — 16px square, which is a
+   * quarter of the area a thumb needs.
+   */
+  @media (hover: none) and (pointer: coarse) {
+    button,
+    [role='button'],
+    a.btn-primary,
+    a.btn-secondary,
+    a.btn-ghost,
+    input:not([type='checkbox']):not([type='radio']),
+    select {
+      min-height: 44px;
+    }
+
+    input[type='checkbox'],
+    input[type='radio'] {
+      width: 20px;
+      height: 20px;
+    }
+
+    /*
+     * The label is the real target for a checkbox: it is what a thumb
+     * actually lands on, and it is already next to the box.
+     */
+    label:has(> input[type='checkbox']),
+    label:has(> input[type='radio']) {
+      min-height: 44px;
+      align-items: center;
+    }
+  }
+
+  /*
+   * The notch, the rounded corners and the home indicator.
+   *
+   * env() returns zero unless index.html asks for viewport-fit=cover, which
+   * it now does. Used by the app shell and by anything pinned to an edge;
+   * on Android and on desktop these all resolve to zero and change nothing.
+   */
+  .pad-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pad-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pad-safe-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
 }
 
 @layer components {

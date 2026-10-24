@@ -64,7 +64,9 @@ export const Sidebar = ({ open, onNavigate }: SidebarProps) => {
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-outline-variant/60 bg-surface transition-transform duration-200 lg:static lg:translate-x-0',
+        // The drawer spans the full height on a phone, so it owns both
+        // insets: the notch above and the home indicator below.
+        'pad-safe-top pad-safe-bottom fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col overflow-y-auto overscroll-contain border-r border-outline-variant/60 bg-surface transition-transform duration-200 lg:static lg:translate-x-0',
         open ? 'translate-x-0' : '-translate-x-full',
       )}
       aria-label="Main navigation"

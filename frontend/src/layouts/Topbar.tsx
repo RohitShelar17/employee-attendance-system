@@ -37,7 +37,10 @@ export const Topbar = ({ onToggleSidebar }: TopbarProps) => {
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-md border-b border-outline-variant/60 bg-surface-container-lowest px-margin-mobile md:px-margin-desktop">
+    // pad-safe-top: the bar sits at the very top, so it is what the notch
+    // would cover. box-content keeps the inset additive rather than eating
+    // into the 64px the bar is supposed to be.
+    <header className="pad-safe-top pad-safe-x sticky top-0 z-30 box-content flex h-16 items-center gap-md border-b border-outline-variant/60 bg-surface-container-lowest px-margin-mobile md:px-margin-desktop">
       <button
         type="button"
         onClick={onToggleSidebar}

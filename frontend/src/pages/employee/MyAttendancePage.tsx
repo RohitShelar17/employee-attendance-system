@@ -91,6 +91,10 @@ export const MyAttendancePage = () => {
       key: 'break',
       header: 'Break',
       className: 'tabular-nums whitespace-nowrap',
+      // Dropped on phones: it reads "—" on most days, and eight labelled
+      // lines per card turns nine days into a long scroll. Still in the
+      // table on anything wider.
+      hideOnMobile: true,
       render: (row) => (row.breakMinutes > 0 ? `${row.breakMinutes}m` : '—'),
     },
     {
@@ -114,6 +118,9 @@ export const MyAttendancePage = () => {
     {
       key: 'location',
       header: 'Location',
+      // The longest value on the row and the least scanned. Somebody
+      // checking their week on a phone wants times and status.
+      hideOnMobile: true,
       render: (row) =>
         row.punchInLocation ? (
           <span className="text-body-sm text-on-surface-variant">{row.punchInLocation}</span>

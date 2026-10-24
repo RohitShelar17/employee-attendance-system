@@ -21,7 +21,12 @@ export const DashboardLayout = () => {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onToggleSidebar={() => setSidebarOpen((open) => !open)} />
-        <main className="flex-1 px-margin-mobile py-lg md:px-margin-desktop">
+        {/*
+          pad-safe-bottom keeps the last row clear of the iPhone home
+          indicator, and pad-safe-x of the rounded corners in landscape.
+          Both are zero everywhere else.
+        */}
+        <main className="pad-safe-bottom pad-safe-x flex-1 px-margin-mobile py-lg md:px-margin-desktop">
           <Outlet />
         </main>
       </div>

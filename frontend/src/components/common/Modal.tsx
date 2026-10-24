@@ -60,7 +60,10 @@ export const Modal = ({ open, onClose, title, description, children, footer, siz
         aria-labelledby="modal-title"
         tabIndex={-1}
         className={cn(
-          'relative z-10 flex max-h-[92vh] w-full flex-col rounded-t-lg bg-surface-container-lowest shadow-overlay animate-fade-in sm:rounded-lg',
+          // pad-safe-bottom: on phones this is a bottom sheet, so its
+          // footer — where Confirm and Cancel live — otherwise ends up
+          // under the iPhone home indicator.
+          'pad-safe-bottom relative z-10 flex max-h-[92vh] w-full flex-col rounded-t-lg bg-surface-container-lowest shadow-overlay animate-fade-in sm:rounded-lg sm:pb-0',
           SIZES[size],
         )}
       >
