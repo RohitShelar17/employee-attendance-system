@@ -2,6 +2,7 @@ package com.company.attendance.controller;
 
 import com.company.attendance.dto.request.attendance.BreakRequest;
 import com.company.attendance.dto.request.attendance.PunchRequest;
+import com.company.attendance.dto.request.attendance.AttendanceOverrideRequest;
 import com.company.attendance.dto.response.ApiResponse;
 import com.company.attendance.dto.response.PageResponse;
 import com.company.attendance.dto.response.attendance.AttendanceCalendarResponse;
@@ -11,6 +12,7 @@ import com.company.attendance.dto.response.attendance.AttendanceSummaryResponse;
 import com.company.attendance.entity.Attendance;
 import com.company.attendance.security.CurrentUser;
 import com.company.attendance.security.UserPrincipal;
+import com.company.attendance.service.AttendanceOverrideService;
 import com.company.attendance.service.AttendanceService;
 import com.company.attendance.service.BreakService;
 import com.company.attendance.service.PunchService;
@@ -27,6 +29,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -51,13 +54,16 @@ public class AttendanceController {
     private final PunchService punchService;
     private final BreakService breakService;
     private final AttendanceService attendanceService;
+    private final AttendanceOverrideService attendanceOverrideService;
 
     public AttendanceController(PunchService punchService,
                                 BreakService breakService,
-                                AttendanceService attendanceService) {
+                                AttendanceService attendanceService,
+                                AttendanceOverrideService attendanceOverrideService) {
         this.punchService = punchService;
         this.breakService = breakService;
         this.attendanceService = attendanceService;
+        this.attendanceOverrideService = attendanceOverrideService;
     }
 
     // -----------------------------------------------------------------
@@ -232,6 +238,31 @@ public class AttendanceController {
 
         return ResponseEntity.ok(ApiResponse.success(
                 attendanceService.getCalendar(principal, employeeId, year, month)));
+    }
+
+    /**
+     * Sets a day's punch times directly, with no request and no approval.
+     *
+     * <p>SUPER_ADMIN only — see V20 for why ADMIN and HR are excluded. The
+     * ordinary route is a regularization, which keeps a second pair of eyes on
+     * anything that changes somebody's pay; this is the escape hatch for the
+     * days that flow cannot reach, and every use is audited with its reason.
+     *
+     * <p>Addressed by employee and date rather than by attendance id, because
+     * one of the cases it exists for is a day with no attendance row at all.
+     */
+    @PutMapping("/{employeeId}/{date}/override")
+    @PreAuthorize("hasAuthority('ATTENDANCE_OVERRIDE')")
+    @Operation(summary = "Set punch times directly (super admin only, always audited)")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> override(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long employeeId,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Valid @RequestBody AttendanceOverrideRequest request) {
+
+        Attendance updated = attendanceOverrideService.override(principal, employeeId, date, request);
+        return ResponseEntity.ok(ApiResponse.success(summarise(updated),
+                "Times updated for " + date + ". The change has been recorded in the audit trail."));
     }
 
     // -----------------------------------------------------------------

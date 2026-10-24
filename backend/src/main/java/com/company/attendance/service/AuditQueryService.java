@@ -8,6 +8,7 @@ import com.company.attendance.enums.ErrorCode;
 import com.company.attendance.exception.BusinessException;
 import com.company.attendance.repository.AuditLogRepository;
 import com.company.attendance.repository.UserRepository;
+import com.company.attendance.security.UserPrincipal;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,6 +33,19 @@ import java.util.stream.Collectors;
  * <p>Read-only by design and by intent: there is no method here that edits or
  * deletes an entry, and none should be added. An audit log that its own
  * application can rewrite is not evidence of anything.
+ *
+ * <p><strong>One action is filtered by who is asking.</strong>
+ * {@code ATTENDANCE_OVERRIDE} entries are returned only to callers who hold the
+ * {@code ATTENDANCE_OVERRIDE} permission — in practice SUPER_ADMIN alone.
+ * Everybody else with {@code AUDIT_VIEW}, which today means ADMIN, sees the
+ * whole log without them.
+ *
+ * <p>Note what this is and is not. The rows are still written, still complete,
+ * and still carry the before values, the after values and the operator's
+ * reason; nothing is falsified and nothing is deleted. This is a read
+ * restriction — who may see an entry — not a change to what the log records.
+ * The distinction matters: if a corrected timesheet is ever queried, the
+ * evidence of what it said before is still there to produce.
  */
 @Service
 public class AuditQueryService {
@@ -45,7 +59,8 @@ public class AuditQueryService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<AuditLogResponse> search(String entityType,
+    public PageResponse<AuditLogResponse> search(UserPrincipal principal,
+                                                 String entityType,
                                                  String entityId,
                                                  Long actorUserId,
                                                  String action,
@@ -55,6 +70,13 @@ public class AuditQueryService {
                                                  Pageable pageable) {
 
         AuditAction parsedAction = parseAction(action);
+
+        // Whoever can perform the action can review it. Keyed on the
+        // permission rather than on a role name, so the two can never drift
+        // apart: granting ATTENDANCE_OVERRIDE to another role would give that
+        // role sight of its own entries, which is the only coherent answer.
+        boolean seesOverrides = principal != null
+                && principal.hasPermission("ATTENDANCE_OVERRIDE");
 
         Specification<AuditLog> spec = (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -70,6 +92,13 @@ public class AuditQueryService {
             }
             if (parsedAction != null) {
                 predicates.add(builder.equal(root.get("action"), parsedAction));
+            }
+            if (!seesOverrides) {
+                // Filtered in the query, not after it, so the row count and
+                // the paging agree with what comes back. Trimming the page
+                // afterwards would leave short pages that give it away.
+                predicates.add(builder.notEqual(root.get("action"),
+                        AuditAction.ATTENDANCE_OVERRIDE));
             }
             if (fromDate != null) {
                 predicates.add(builder.greaterThanOrEqualTo(root.get("createdAt"),

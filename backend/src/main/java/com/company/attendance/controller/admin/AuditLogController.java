@@ -2,6 +2,8 @@ package com.company.attendance.controller.admin;
 
 import com.company.attendance.dto.response.ApiResponse;
 import com.company.attendance.dto.response.PageResponse;
+import com.company.attendance.security.CurrentUser;
+import com.company.attendance.security.UserPrincipal;
 import com.company.attendance.dto.response.audit.AuditLogResponse;
 import com.company.attendance.service.AuditQueryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,6 +43,7 @@ public class AuditLogController {
     @PreAuthorize("hasAuthority('AUDIT_VIEW')")
     @Operation(summary = "Search the audit trail")
     public ResponseEntity<ApiResponse<PageResponse<AuditLogResponse>>> search(
+            @CurrentUser UserPrincipal principal,
             @RequestParam(required = false) String entityType,
             @RequestParam(required = false) String entityId,
             @RequestParam(required = false) Long actorUserId,
@@ -52,7 +55,7 @@ public class AuditLogController {
             Pageable pageable) {
 
         return ResponseEntity.ok(ApiResponse.success(auditQueryService.search(
-                entityType, entityId, actorUserId, action, fromDate, toDate, search, pageable)));
+                principal, entityType, entityId, actorUserId, action, fromDate, toDate, search, pageable)));
     }
 
     @GetMapping("/entity-types")

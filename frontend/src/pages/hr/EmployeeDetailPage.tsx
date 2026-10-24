@@ -124,6 +124,14 @@ export const EmployeeDetailPage = () => {
               <button
                 type="button"
                 className="btn-secondary"
+                onClick={() => navigate(ROUTES.employeeAttendance(employee.id))}
+              >
+                <Icon name="schedule" className="text-[18px]" />
+                Attendance
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
                 onClick={() => navigate(ROUTES.employeeEdit(employee.id))}
               >
                 <Icon name="edit" className="text-[18px]" />

@@ -30,6 +30,13 @@ const DesignationsPage = lazy(() => import('../pages/admin/DesignationsPage').th
 const EmployeeDetailPage = lazy(() => import('../pages/hr/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage })));
 const EmployeeDirectoryPage = lazy(() => import('../pages/hr/EmployeeDirectoryPage').then((m) => ({ default: m.EmployeeDirectoryPage })));
 const EmployeeFormPage = lazy(() => import('../pages/hr/EmployeeFormPage').then((m) => ({ default: m.EmployeeFormPage })));
+const ExamsPage = lazy(() => import('../pages/employee/ExamsPage').then((m) => ({ default: m.ExamsPage })));
+const ExamAttemptPage = lazy(() => import('../pages/employee/ExamAttemptPage').then((m) => ({ default: m.ExamAttemptPage })));
+const ExamResultPage = lazy(() => import('../pages/employee/ExamResultPage').then((m) => ({ default: m.ExamResultPage })));
+const ManageExamsPage = lazy(() => import('../pages/manager/ManageExamsPage').then((m) => ({ default: m.ManageExamsPage })));
+const ExamFormPage = lazy(() => import('../pages/manager/ExamFormPage').then((m) => ({ default: m.ExamFormPage })));
+const ExamDetailPage = lazy(() => import('../pages/manager/ExamDetailPage').then((m) => ({ default: m.ExamDetailPage })));
+const EmployeeAttendancePage = lazy(() => import('../pages/hr/EmployeeAttendancePage').then((m) => ({ default: m.EmployeeAttendancePage })));
 const ForgotPasswordPage = lazy(() => import('../pages/public/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
 const LeaveApprovalsPage = lazy(() => import('../pages/manager/LeaveApprovalsPage').then((m) => ({ default: m.LeaveApprovalsPage })));
 const LeaveBalancePage = lazy(() => import('../pages/employee/LeaveBalancePage').then((m) => ({ default: m.LeaveBalancePage })));
@@ -39,6 +46,11 @@ const MyLeavesPage = lazy(() => import('../pages/employee/MyLeavesPage').then((m
 const NotificationsPage = lazy(() => import('../pages/employee/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 const OfficesPage = lazy(() => import('../pages/admin/OfficesPage').then((m) => ({ default: m.OfficesPage })));
 const ProfilePage = lazy(() => import('../pages/employee/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const MeetingsPage = lazy(() => import('../pages/employee/MeetingsPage').then((m) => ({ default: m.MeetingsPage })));
+const MeetingDetailPage = lazy(() => import('../pages/employee/MeetingDetailPage').then((m) => ({ default: m.MeetingDetailPage })));
+const ManageMeetingsPage = lazy(() => import('../pages/manager/ManageMeetingsPage').then((m) => ({ default: m.ManageMeetingsPage })));
+const MeetingFormPage = lazy(() => import('../pages/manager/MeetingFormPage').then((m) => ({ default: m.MeetingFormPage })));
+const MeetingAttendancePage = lazy(() => import('../pages/manager/MeetingAttendancePage').then((m) => ({ default: m.MeetingAttendancePage })));
 const RegularizationPage = lazy(() => import('../pages/employee/RegularizationPage').then((m) => ({ default: m.RegularizationPage })));
 const ReportsPage = lazy(() => import('../pages/manager/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const RequestApprovalsPage = lazy(() => import('../pages/manager/RequestApprovalsPage').then((m) => ({ default: m.RequestApprovalsPage })));
@@ -116,6 +128,7 @@ export const AppRoutes = () => (
           <Route path={ROUTES.employeeNew} element={<EmployeeFormPage />} />
           <Route path="/employees/:id/edit" element={<EmployeeFormPage />} />
           <Route path={ROUTES.employeeImport} element={<BulkImportPage />} />
+          <Route path="/employees/:id/attendance" element={<EmployeeAttendancePage />} />
         </Route>
 
         {/* Team and organisation view — the API decides how wide it is */}
@@ -173,6 +186,50 @@ export const AppRoutes = () => (
         >
           <Route path={ROUTES.regularization} element={<RegularizationPage />} />
           <Route path={ROUTES.workFromHome} element={<WorkFromHomePage />} />
+        </Route>
+
+        {/* Meetings */}
+        <Route element={<PermissionGuard anyOf={[PERMISSIONS.MEETING_MANAGE_TEAM, PERMISSIONS.MEETING_MANAGE_ALL]} />}>
+          <Route path={ROUTES.meetingsManage} element={<ManageMeetingsPage />} />
+          <Route path={ROUTES.meetingNew} element={<MeetingFormPage />} />
+          <Route path="/meetings/:id/edit" element={<MeetingFormPage />} />
+        </Route>
+        <Route element={<PermissionGuard anyOf={[PERMISSIONS.MEETING_REPORT_VIEW, PERMISSIONS.MEETING_MANAGE_TEAM, PERMISSIONS.MEETING_MANAGE_ALL]} />}>
+          <Route path="/meetings/:id/attendance" element={<MeetingAttendancePage />} />
+        </Route>
+        <Route element={<PermissionGuard anyOf={[PERMISSIONS.MEETING_VIEW_SELF]} />}>
+          <Route path={ROUTES.meetings} element={<MeetingsPage />} />
+          <Route path="/meetings/:id" element={<MeetingDetailPage />} />
+        </Route>
+
+        {/*
+          Exams. The manage routes come first so /exams/manage and /exams/new
+          are matched before /exams/:id would swallow them.
+        */}
+        <Route element={<PermissionGuard anyOf={[PERMISSIONS.EXAM_MANAGE]} />}>
+          <Route path={ROUTES.examsManage} element={<ManageExamsPage />} />
+          <Route path={ROUTES.examNew} element={<ExamFormPage />} />
+          <Route path="/exams/:id/edit" element={<ExamFormPage />} />
+        </Route>
+        <Route
+          element={
+            <PermissionGuard
+              anyOf={[
+                PERMISSIONS.EXAM_MANAGE,
+                PERMISSIONS.EXAM_RESULT_VIEW_TEAM,
+                PERMISSIONS.EXAM_RESULT_VIEW_ALL,
+              ]}
+            />
+          }
+        >
+          <Route path="/exams/:id" element={<ExamDetailPage />} />
+        </Route>
+        <Route element={<PermissionGuard anyOf={[PERMISSIONS.EXAM_ATTEMPT]} />}>
+          <Route path="/exams/attempt/:attemptId" element={<ExamAttemptPage />} />
+          <Route path="/exams/result/:attemptId" element={<ExamResultPage />} />
+        </Route>
+        <Route element={<PermissionGuard anyOf={[PERMISSIONS.EXAM_VIEW_SELF]} />}>
+          <Route path={ROUTES.exams} element={<ExamsPage />} />
         </Route>
 
         {/* Reports */}
